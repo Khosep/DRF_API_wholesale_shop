@@ -1,0 +1,26 @@
+# .dockerignore file for PyCharm Django-REST project
+
+# IDE Project files
+*.iml
+.idea/
+__pycache__/
+.vscode/
+*.pyc
+.pytest_cache/
+
+# Compiled Python files
+*.pyo
+*.pyd
+*.pyc
+
+# Local development files
+*.sqlite3
+venv/
+.env
+
+# Docker files
+Dockerfile
+docker-compose.yaml
+
+.git/
+data/

@@ -1,0 +1,227 @@
+### Регистрация нового пользователя
+POST {{Host}}/user/register/
+Content-Type: application/json
+
+{
+  "email": "Sid_585@mail.ru",
+  "password": "Test-12-sdfs",
+  "first_name": "Ivan",
+  "last_name": "Sidorov",
+  "company": "Creeping collapse",
+  "position": "manager",
+  "type": "supplier"
+}
+
+### Подтвеждение регистрации нового пользователя (по токену из email)
+POST {{Host}}/user/register/confirm/
+Content-Type: application/json
+
+{
+  "email": "Sid_585@mail.ru",
+  "token": "52156df4g3h73d43s541bn89sp41864f"
+}
+
+### Первичная аутентификация пользователя и получение аутентификационного токена
+POST {{Host}}/user/login/
+Content-Type: application/json
+
+{
+  "email": "Sid_585@mail.ru",
+  "password": "Test-12-sdfs"
+}
+
+### Сброс пароля пользователя
+POST {{Host}}/user/password_reset/
+Content-Type: application/json
+
+{
+  "email": "Sid_585@mail.ru"
+}
+
+### Подтверждение сброса пароля пользователя (по токену из email)
+POST {{Host}}/user/password_reset/confirm/
+Content-Type: application/json
+
+{
+  "token": "5362f6g4ghd95cnk97y4dcg5h4rs",
+  "password": "New_password_123"
+}
+
+### Профиль пользователя: просмотр
+GET {{Host}}/user/profile/
+Authorization: Token {{Token}}
+
+### Профиль пользователя: изменение
+PUT {{Host}}/user/profile/
+Authorization: Token {{Token}}
+Content-Type: application/json
+
+{
+  "email": "Sid_585_new@mail.ru",
+  "password": "Newest_password_890",
+  "first_name": "Ivan",
+  "last_name": "Sidorov",
+  "company": "Steady decay",
+  "position": "senior manager",
+  "type": "buyer"
+}
+
+### Профиль пользователя: удаление
+DELETE {{Host}}/user/profile/
+Authorization: Token {{Token}}
+
+### Покупатель: просмотр всех покупателей, созданных пользователем
+GET {{Host}}/buyer/
+Authorization: Token {{Token}}
+
+### Покупатель: просмотр конкретного покупателя
+GET {{Host}}/buyer/{id}/
+Authorization: Token {{Token}}
+
+### Покупатель: создание нового покупателя
+POST {{Host}}/buyer/
+Authorization: Token {{Token}}
+Content-Type: application/json
+
+{
+  "name": "World of accessories",
+  "person": "Bykov Konstantin",
+  "phone": "+79152834565",
+  "region": "Permskiy",
+  "district": "Okhanskiy",
+  "locality_name": "Glukhovo village",
+  "street": "Lenina",
+  "house": "1",
+  "structure": "2",
+  "building": "3",
+  "apartment": "4"
+}
+
+### Покупатель: изменение
+POST {{Host}}/buyer/{id}/
+Authorization: Token {{Token}}
+Content-Type: application/json
+
+{
+  "name": "World of accessories 2",
+  "person": "Bykova Elena",
+  "phone": "+79010101010",
+  "locality_name: Twograd"
+}
+
+### Покупатель: частичное изменение
+PATCH {{Host}}/buyer/{id}/
+Authorization: Token {{Token}}
+Content-Type: application/json
+
+{
+  "apartment": "15"
+}
+
+### Покупатель: удаление
+DELETE {{Host}}/buyer/{id}/
+Authorization: Token {{Token}}
+
+### Поставщик: просмотр всех поставщиков
+GET {{Host}}/supplier/
+
+### Поставщик: просмотр конкретного поставщика
+GET {{Host}}/supplier/{id}/
+
+### Поставщик: создание нового поставщика
+POST {{Host}}/supplier/
+Authorization: Token {{Token}}
+Content-Type: application/json
+
+{
+  "name": "For you",
+  "person": "Losev Pavel",
+  "phone": "+79222222222"
+}
+
+### Поставщик: изменение
+PUT {{Host}}/supplier/{id}/
+Authorization: Token {{Token}}
+Content-Type: application/json
+
+{
+  "name": "For me",
+  "person": "Lososeva Pavlina",
+  "phone": "+79111111111"
+}
+
+### Поставщик: частичное изменение (в частности изменение статуса поставщика)
+PATCH {{Host}}/supplier/{id}/
+Authorization: Token {{Token}}
+Content-Type: application/json
+
+{
+  "is_available": "False",
+}
+
+### Поставщик: удаление
+DELETE {{Host}}/supplier/{id}/
+Authorization: Token {{Token}}
+
+### Категории товаров: просмотр всех категорий
+GET {{Host}}/category/
+
+### Обновление прайс-листа
+POST {{Host}}/supplier/price-list/
+Authorization: Token {{Token}}
+Content-Type: application/json
+
+{
+  "supplier_id": 3,
+  "file_url": "https://raw.githubusercontent.com/netology-code/python-final-diplom/master/data/shop1.yaml"
+}
+
+### Просмотр доступных для заказа товаров
+GET {{Host}}/supplier/products/
+
+
+### Просмотр корзины
+GET {{Host}}/buyer/basket/
+Authorization: Token {{Token}}
+
+### Создание корзины (или корзин, если пользователь создал несколько покупателей)
+POST {{Host}}/buyer/basket/
+Authorization: Token {{Token}}
+Content-Type: application/json
+
+[{"buyer_id": 2, "items": [{"product_id": 56, "supplier_id": 2, "quantity":2},
+                           {"product_id": 59, "supplier_id": 4, "quantity":3}
+                          ]
+ },
+ {"buyer_id": 1, "items": [{"product_id": 56, "supplier_id": 2, "quantity":1},
+                           {"product_id": 57, "supplier_id": 4, "quantity":2}
+                          ]
+ }
+]
+
+### Удаление позиций заказа из корзин(ы) по id позиции
+POST {{Host}}/buyer/basket/
+Authorization: Token {{Token}}
+Content-Type: application/json
+
+[{"buyer_id": 2, "items": [94]},
+ {"buyer_id": 1, "items": [83, 95, 60]}
+]
+
+### Просмотр размещенных заказов
+GET {{Host}}/buyer/order/
+Authorization: Token {{Token}}
+
+### Размещение заказов из корзин(ы)
+POST {{Host}}/buyer/order/
+Authorization: Token {{Token}}
+Content-Type: application/json
+
+{
+"orders_ids": [22, 23]
+}
+
+### Получить список заказов для поставщиков
+GET {{Host}}/supplier/order/
+Authorization: Token {{Token}}
+Content-Type:application/json
