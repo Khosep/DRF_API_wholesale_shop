@@ -70,7 +70,7 @@ coverage.xml
 
 
 
-*/migrations/*
+#*/migrations/*
 .log
 db.sqlite3
 
