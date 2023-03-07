@@ -159,15 +159,20 @@ REST_FRAMEWORK = {
         # 'rest_framework.authentication.BasicAuthentication',
         'rest_framework.authentication.TokenAuthentication',
     ),
+    'DEFAULT_THROTTLE_CLASSES': [
+        'backend.throttles.AnonShortRateThrottle',
+        'backend.throttles.AnonLongRateThrottle',
+        'backend.throttles.UserShortRateThrottle',
+        'backend.throttles.UserLongRateThrottle',
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'anon_short': '60/min',
+        'anon_long': '1200/day',
+        'user_short': '120/min',
+        'user_long': '2400/day',
+        'price_list_update': '10/min',
 
-    # 'DEFAULT_RENDERER_CLASSES': (
-    #     'rest_framework.renderers.JSONRenderer',
-    #     'rest_framework.renderers.BrowsableAPIRenderer',
-    #
-    # ),
-
-
-
+    }
 }
 
 # DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'

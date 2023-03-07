@@ -201,6 +201,7 @@ class PriceListUpdateView(views.APIView):
     """
 
     permission_classes = [IsAuthenticated, IsSupplier]
+    throttle_scope = 'price_list_update'
 
     def post(self, request):
         serializer = PriceListUpdateSerializer(data=request.data)
