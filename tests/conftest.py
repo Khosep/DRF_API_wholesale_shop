@@ -12,7 +12,7 @@ def client():
 
 @pytest.fixture
 def inactive_user():
-    return CustomUser.objects.create_user(email='test-ina@test.te', password='ina-12345Qwer')
+    return CustomUser.objects.create_user(email='test-ina@test.te', password='ina-12345Qwer', is_active=False)
 
 
 @pytest.fixture

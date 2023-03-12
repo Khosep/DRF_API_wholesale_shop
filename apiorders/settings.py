@@ -46,6 +46,10 @@ INSTALLED_APPS = [
     'rest_framework',
     'rest_framework.authtoken',
     'django_rest_passwordreset',
+    'oauth2_provider',
+    'social_django',
+    'drf_social_oauth2',
+
 ]
 
 MIDDLEWARE = [
@@ -71,6 +75,8 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'social_django.context_processors.backends',
+                'social_django.context_processors.login_redirect',
             ],
         },
     },
@@ -143,6 +149,13 @@ SERVER_EMAIL = EMAIL_HOST_USER
 CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL', default='redis://127.0.0.1:6379')
 CELERY_RESULT_BACKEND = os.getenv('CELERY_RESULT_BACKEND', default='redis://127.0.0.1:6379')
 
+SOCIAL_AUTH_YANDEX_KEY = os.getenv('SOCIAL_AUTH_YANDEX_KEY')
+SOCIAL_AUTH_YANDEX_SECRET = os.getenv('SOCIAL_AUTH_YANDEX_SECRET')
+
+SOCIAL_AUTH_JSONFIELD_ENABLED = True
+SOCIAL_AUTH_ADMIN_USER_SEARCH_FIELDS = ['first_name', 'last_name', 'email']
+SOCIAL_AUTH_USER_MODEL = AUTH_USER_MODEL
+
 
 
 # Default primary key field type
@@ -158,6 +171,8 @@ REST_FRAMEWORK = {
         # 'rest_framework.authentication.SessionAuthentication',
         # 'rest_framework.authentication.BasicAuthentication',
         'rest_framework.authentication.TokenAuthentication',
+        'oauth2_provider.contrib.rest_framework.OAuth2Authentication',
+        'drf_social_oauth2.authentication.SocialAuthentication',
     ),
     'DEFAULT_THROTTLE_CLASSES': [
         'backend.throttles.AnonShortRateThrottle',
@@ -174,6 +189,12 @@ REST_FRAMEWORK = {
 
     }
 }
+
+AUTHENTICATION_BACKENDS = (
+   'social_core.backends.yandex.YandexOAuth2',
+   'drf_social_oauth2.backends.DjangoOAuth2',
+   'django.contrib.auth.backends.ModelBackend',
+)
 
 # DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
