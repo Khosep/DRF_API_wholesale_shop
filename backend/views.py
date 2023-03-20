@@ -3,20 +3,24 @@ import yaml
 
 from django.contrib.auth import authenticate, get_user_model
 from django.db.models import Q, Sum, F
+from drf_social_oauth2.views import ConvertTokenView
+from drf_spectacular.utils import extend_schema
 from rest_framework import generics, views, viewsets, status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
-from django.db import connection, reset_queries
 from rest_framework.authtoken.models import Token
 from django.db import IntegrityError
 from rest_framework.authentication import TokenAuthentication, BasicAuthentication, SessionAuthentication
 from yaml import SafeLoader
-from backend.models import CustomUser, Buyer, ConfirmEmailToken, Supplier, ProductCategory, ProductSupplier, Product, \
-    ProductSupplierParameter, Parameter, Order, OrderItem
+
+from apiorders.schema import extend_schema_data
+from backend.models import CustomUser, Buyer, ConfirmEmailToken, Supplier, ProductCategory, ProductSupplier, \
+    Order, OrderItem
 from backend.permissions import *
 from backend.serializers import RegisterAccountSerializer, UserProfileSerializer, BuyerSerializer, SupplierSerializer, \
     ProductCategorySerializer, PriceListUpdateSerializer, ProductSupplierSerializer, OrderItemSerializer, \
-    BasketGetSerializer, BuyerOrdertGetSerializer, SupplierOrdertGetSerializer
+    BasketGetSerializer, BuyerOrderGetSerializer, SupplierOrdertGetSerializer, BasketPostRequestSerializer, \
+    BasketDeletetRequestSerializer, BuyerOrderPostRequestSerializer
 from backend.signals import user_registered, new_orders_to_user, new_orders_to_admin
 from backend.tasks import send_email_new_order_task, send_email_user_register_task, do_import_task
 from django.contrib.auth.password_validation import validate_password
@@ -27,6 +31,10 @@ def is_owner(user_id, buyer_id):
         return True
     return False
 
+
+@extend_schema(
+    description=extend_schema_data['RegisterAccountView']['description'],
+)
 class RegisterAccountView(generics.CreateAPIView):
     """
     Регистрация нового пользователя. Обязательные поля - email и password.
@@ -56,11 +64,17 @@ class RegisterAccountView(generics.CreateAPIView):
                                     ' На Ваш email отправлен токен для подтверждения учетной записи'},
                         status=status.HTTP_201_CREATED)
 
+
 class ConfirmAccountView(views.APIView):
     """Подтверждение аккаунта. Обязательные поля - email и token."""
 
     permission_classes = [AllowAny]
 
+    @extend_schema(
+        request=extend_schema_data['ConfirmAccountView']['request'],
+        responses=extend_schema_data['ConfirmAccountView']['responses'],
+
+    )
     def post(self, request, *args, **kwargs):
         email = request.data.get('email')
         token = request.data.get('token')
@@ -79,13 +93,17 @@ class ConfirmAccountView(views.APIView):
         confirm_token.delete()
         return Response({'success': 'Аккаунт успешно подтвержден'}, status=status.HTTP_200_OK)
 
+
 class LoginView(views.APIView):
     """
-    #Вход в аккаунт. Обязательные поля - email и password
-    #В случае успеха в ответе приходит токен для использования в последующих запросах.
+    Вход в аккаунт. Обязательные поля - email и password
+    В случае успеха в ответе приходит токен для использования в последующих запросах.
     """
     authentication_classes = [BasicAuthentication]
 
+    @extend_schema(
+        request=extend_schema_data['LoginView']['request'],
+    )
     def post(self, request, *args, **kwargs):
         email = request.data.get('email', None)
         password = request.data.get('password', None)
@@ -116,11 +134,15 @@ class UserProfileView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = UserProfileSerializer
 
     def get(self, request, *args, **kwargs):
+        """Просмотр профиля"""
+
         user = request.user
         serializer = self.get_serializer(user)
         return Response(serializer.data)
 
     def update(self, request, *args, **kwargs):
+        """Обновление профиля"""
+
         user = request.user
         serializer = self.get_serializer(user, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
@@ -147,8 +169,12 @@ class UserProfileView(generics.RetrieveUpdateDestroyAPIView):
         return Response({'status': f'Данные обновлены{msg_email}', 'data': serializer.data},
                         status=status.HTTP_200_OK)
 
-    def destroy(self, request, *args, **kwargs):
-        """Не физическое удаление, а is_active=False, что для пользователя равносильно удалению"""
+    @extend_schema(
+        responses=extend_schema_data['UserProfileView_DELETE']['responses'],
+        description=extend_schema_data['UserProfileView_DELETE']['description'],)
+    def delete(self, request, *args, **kwargs):
+        """Удаление профиля. Не физическое удаление, а is_active=False, что для пользователя равносильно удалению"""
+
         user = request.user
         user.is_active = False
         user.save()
@@ -194,6 +220,7 @@ class ProductCategoryView(generics.ListAPIView):
     queryset = ProductCategory.objects.all()
 
 
+
 class PriceListUpdateView(views.APIView):
     """
     Обновление из файла. Пользователь отправляет post-запрос.
@@ -203,6 +230,9 @@ class PriceListUpdateView(views.APIView):
     permission_classes = [IsAuthenticated, IsSupplier]
     throttle_scope = 'price_list_update'
 
+    @extend_schema(
+        request=extend_schema_data['PriceListUpdateView']['request'],
+    )
     def post(self, request):
         serializer = PriceListUpdateSerializer(data=request.data)
         if serializer.is_valid():
@@ -236,13 +266,16 @@ class PriceListUpdateView(views.APIView):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-
 class ProductSupplierView(views.APIView):
     """
     Просмотр товаров доступных поставщиков c возможностью выбора (через параметры запроса)
     по отдельным категориям, поставщикам, продуктам ('category_id, 'supplier_id, product_id)
     """
 
+    @extend_schema(
+        responses=extend_schema_data['ProductSupplierView']['responses'],
+        parameters=extend_schema_data['ProductSupplierView']['parameters'],
+    )
     def get(self, request, *args, **kwargs):
 
         # Если в запросе есть параметры supplier_id или category_id или product_id
@@ -257,8 +290,8 @@ class ProductSupplierView(views.APIView):
             query &= Q(product__category_id=category_id)
         if product_id:
             query &= Q(product_id=product_id)
-        #Queryset c оптимизацией запросов к базе данных
-        #select_related - когда выбираем один объект, prefetch_related - при выдаче нескольких объектов)
+        # Queryset c оптимизацией запросов к базе данных
+        # select_related - когда выбираем один объект, prefetch_related - при выдаче нескольких объектов)
         queryset = ProductSupplier.objects.filter(
             query
         ).select_related(
@@ -272,7 +305,7 @@ class ProductSupplierView(views.APIView):
 
 
 class BasketView(views.APIView):
-    """Корзины покупателей: просмотр, создание/изменение, удалени"""
+    """Корзины покупателей: просмотр, создание/изменение, удаление"""
 
     permission_classes = [IsAuthenticated, IsBuyer]
 
@@ -283,40 +316,15 @@ class BasketView(views.APIView):
         for ps in ProductSupplier.objects.filter(supplier__is_available=True):
             self.product_supplier_map[(ps.product_id, ps.supplier_id)] = ps
 
-    def _is_valid_format(self, request_data):
+    def _is_valid_values(self, items):
         """
-        Проверка соответствия запроса необходимому формату и наличия необходимых полей
+        Проверка значений в запросе для полей, входящих в items
         """
-        if not isinstance(request_data, list):
-            return False
-        for rd in request_data:
-            if 'buyer_id' not in rd or 'items' not in rd:
+        for item in items:
+            quantity = item['quantity']
+            product_supplier = self._get_product_supplier(item)
+            if not product_supplier or quantity > product_supplier.quantity:
                 return False
-            if not isinstance(rd['buyer_id'], int) or not isinstance(rd['items'], list):
-                return False
-            if self.request.method == 'POST':
-                for item in rd['items']:
-                    if not isinstance(item, dict) \
-                            or 'product_id' not in item \
-                            or 'supplier_id' not in item\
-                            or item.get('quantity', 0) < 1:
-                        return False
-            else:
-                return all(int(_) for _ in rd['items'])
-        return True
-
-    def _is_valid_values(self, items, buyer_id):
-        """
-        Проверка значений в запросе
-        """
-        if not is_owner(self.request.user.id, buyer_id):
-            return False
-        if self.request.method == 'POST':
-            for item in items:
-                quantity = item['quantity']
-                product_supplier = self._get_product_supplier(item)
-                if not product_supplier or quantity > product_supplier.quantity:
-                    return False
         return True
 
     def _get_product_supplier(self, item):
@@ -324,6 +332,11 @@ class BasketView(views.APIView):
         supplier_id = item['supplier_id']
         return self.product_supplier_map.get((product_id, supplier_id))
 
+    @extend_schema(
+                    request=extend_schema_data['BasketView_POST']['request'],
+                    responses=extend_schema_data['BasketView_POST']['responses'],
+                    description=extend_schema_data['BasketView_POST']['description']
+                   )
     def post(self, request):
         """
         Создание заказа (статус 'basket') и позиций заказа.
@@ -338,16 +351,18 @@ class BasketView(views.APIView):
                                         ]}
             ]
         """
-        request_data = request.data
-        if not self._is_valid_format(request_data):
-            return Response({'error': 'Некорректный формат запроса'}, status=status.HTTP_400_BAD_REQUEST)
+        serializer = BasketPostRequestSerializer(data=request.data, many=True)
+        serializer.is_valid(raise_exception=True)
+        request_data = serializer.validated_data
 
         added = {}
         for buyer_data in request_data:
             buyer_id = buyer_data['buyer_id']
             items = buyer_data.get("items")
-            if not self._is_valid_values(items, buyer_id):
-                return Response({'error': f'Некорректные значения в {buyer_data} '}, status=status.HTTP_400_BAD_REQUEST)
+            if not is_owner(self.request.user.id, buyer_id):
+                return Response({'error': f'Некорректный {buyer_id=}'}, status=status.HTTP_400_BAD_REQUEST)
+            if not self._is_valid_values(items):
+                return Response({'error': f'Некорректные значения в items для {buyer_id=}'}, status=status.HTTP_400_BAD_REQUEST)
             order, _ = Order.objects.get_or_create(buyer_id=buyer_id, state='basket')
             objects_added = 0
             for item in items:
@@ -369,11 +384,15 @@ class BasketView(views.APIView):
 
         return Response({'success': f'{added}'}, status=status.HTTP_201_CREATED)
 
+    @extend_schema(exclude=True)
     def put(self, request):
 
         return Response({'error': 'PUT метод не разрешен. Используйте POST и DELETE методы'},
                         status=status.HTTP_405_METHOD_NOT_ALLOWED)
 
+    @extend_schema(responses=extend_schema_data['BasketView_DELETE']['responses'],
+                   description=extend_schema_data['BasketView_DELETE']['description']
+                   )
     def delete(self, request):
         """
         Удаление позиций из заказа покупателей по номеру позиции в заказе
@@ -381,18 +400,17 @@ class BasketView(views.APIView):
                             {"buyer_id": <id>> "items": [<order_item_id>>]}
                             ]
         """
-
-        request_data = request.data
-        if not self._is_valid_format(request_data):
-            return Response({'error': 'Некорректный формат запроса'}, status=status.HTTP_400_BAD_REQUEST)
+        serializer = BasketDeletetRequestSerializer(data=request.data, many=True)
+        serializer.is_valid(raise_exception=True)
+        request_data = serializer.validated_data
 
         response_data = {}
         for buyer_data in request_data:
             buyer_id = buyer_data['buyer_id']
             items = buyer_data.get("items")
 
-            if not self._is_valid_values(items, buyer_id):
-                response_data[buyer_id] = {'error': f'Некорректные значения в {buyer_data}'}
+            if not is_owner(self.request.user.id, buyer_id):
+                response_data[buyer_id] = {'error': f'Некорректный {buyer_id=}'}
                 continue
 
             order = Order.objects.filter(buyer_id=buyer_id, state='basket').first()
@@ -408,9 +426,9 @@ class BasketView(views.APIView):
                 objects_deleted += deleted_count
 
             if objects_deleted:
-                response_data[order.id] = {'success': f'Количество удаленных позиций: {objects_deleted}'}
+                response_data[buyer_id] = {'success': f'Удалено позиций: {objects_deleted} (заказ №{order.id})'}
             else:
-                response_data[order.id] = {'error': f'Нет таких номеров {items} в корзине'}
+                response_data[buyer_id] = {'error': f'Нет таких позиций {items} в корзине (заказ №{order.id})'}
 
         if all('error' in value for value in response_data.values()):
             return Response(response_data, status=status.HTTP_400_BAD_REQUEST)
@@ -419,8 +437,10 @@ class BasketView(views.APIView):
         else:
             return Response(response_data, status=status.HTTP_206_PARTIAL_CONTENT)
 
+    @extend_schema(responses=extend_schema_data['BasketView']['responses'])
     def get(self, request):
-        """Получить корзину для каждого покупателя, созданного пользователем"""
+        """Просмотр корзины каждого покупателя, созданного пользователем"""
+
         user = request.user
         buyers = user.buyers.all()
         orders = Order.objects.filter(buyer__in=buyers, state='basket').select_related('buyer')
@@ -438,7 +458,7 @@ class BasketView(views.APIView):
                 product_supplier = order_item.product_supplier
                 item_sum = product_supplier.price * order_item.quantity
                 order_item_data = {
-                    'order_item_id': order_item.id,
+                    'id': order_item.id,
                     'product_supplier_id': product_supplier.id,
                     'product_name': product_supplier.product.name,
                     'quantity': order_item.quantity,
@@ -461,19 +481,20 @@ class BasketView(views.APIView):
 
 class BuyerOrderView(views.APIView):
     """
-    Получение и размешение заказов покупателей пользователем
+    Получение и размещение заказов покупателей пользователем
     """
 
     permission_classes = [IsAuthenticated, IsBuyer]
 
+    @extend_schema(responses=extend_schema_data['BuyerOrderView']['responses'])
     def get(self, request):
-        """Получить заказы покупателей"""
+        """Просмотр заказов покупателей"""
 
         user = request.user
         buyers = user.buyers.all()
 
         buyer_data = []
-        #Цикл по покупателям, созданных пользователем
+        # Цикл по покупателям, созданных пользователем
         for buyer in buyers:
             orders = Order.objects.filter(buyer=buyer).exclude(state='basket')
 
@@ -490,7 +511,9 @@ class BuyerOrderView(views.APIView):
                     product_supplier = order_item.product_supplier
                     item_sum = product_supplier.price * order_item.quantity
                     order_item_data = {
+                        'id': order_item.id,
                         'product_supplier_id': product_supplier.id,
+                        'product_name': product_supplier.product.name,
                         'quantity': order_item.quantity,
                         'sum': item_sum
                     }
@@ -500,7 +523,7 @@ class BuyerOrderView(views.APIView):
 
                 # добавляем блок данных по заказу
                 orders_data.append({
-                    'order_id': order.id,
+                    'id': order.id,
                     'state': order.state,
                     'order_sum': order_sum,
                     'order_items': order_items_data,
@@ -513,24 +536,24 @@ class BuyerOrderView(views.APIView):
                 'buyer_sum': buyer_sum,
                 'orders': orders_data,
             })
-        serializer = BuyerOrdertGetSerializer(buyer_data, many=True)
+        serializer = BuyerOrderGetSerializer(buyer_data, many=True)
         return Response(serializer.data)
 
+    @extend_schema(
+                    request=extend_schema_data['BuyerOrderView_POST']['request'],
+                    # responses={201: 'success'},
+                    responses=extend_schema_data['BuyerOrderView_POST']['responses'],
+    )
     def post(self, request):
         """
-        Размещение заказов путем изменения статуса 'basket' на 'new'
-        Формат запроса {'orders_ids':[int, int...]}
+        Размещение заказов (изменение статуса с 'basket' на 'new').
+        Формат запроса: {'orders_ids':[int, int...]}
         """
-        request_data = request.data
         user = request.user
 
-        # Проверка соответствия запроса необходимому формату и наличия необходимых полей
-        if not isinstance(request_data, dict) or \
-                'orders_ids' not in request_data \
-                or not isinstance(request_data['orders_ids'], list) or \
-                not all([isinstance(item, int) for item in request_data['orders_ids']]) \
-                or not request_data['orders_ids']:
-            return Response({'error': 'Некорректный формат запроса'}, status=status.HTTP_400_BAD_REQUEST)
+        serializer = BuyerOrderPostRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        request_data = serializer.validated_data
 
         r_orders_ids = set(request_data['orders_ids'])
 
@@ -562,7 +585,7 @@ class BuyerOrderView(views.APIView):
                 return Response({'success': f'Успешное размещение: {to_place_orders_ids}'},
                                 status=status.HTTP_201_CREATED)
             return Response({'partial success': f'Успешное размещение: {to_place_orders_ids}. '
-                                        f'Некорректные значения: {wrong_orders_ids}'},
+                                                f'Некорректные значения: {wrong_orders_ids}'},
                             status=status.HTTP_206_PARTIAL_CONTENT)
         return Response({'error': f'Проблемы с обновлением'}, status=status.HTTP_404_NOT_FOUND)
 
@@ -574,14 +597,15 @@ class SupplierOrderGetView(views.APIView):
 
     permission_classes = [IsAuthenticated, IsSupplier]
 
+    @extend_schema(responses=extend_schema_data['SupplierOrderGetView']['responses'])
     def get(self, request):
-        """Получить заказы покупателей"""
+        """Просмотр заказов покупателей"""
 
         user = request.user
         suppliers = user.suppliers.all()
 
         supplier_data = []
-        #Цикл по поставщикам пользователя
+        # Цикл по поставщикам пользователя
         for supplier in suppliers:
             orders = Order.objects.filter(
                 order_items__product_supplier__supplier=supplier).exclude(
@@ -604,6 +628,7 @@ class SupplierOrderGetView(views.APIView):
                     item_sum = product_supplier.price * order_item.quantity
                     order_item_data = {
                         'product_supplier_id': product_supplier.id,
+                        'product_name': product_supplier.product.name,
                         'external_id': product_supplier.external_id,
                         'quantity': order_item.quantity,
                         'sum': item_sum
@@ -614,7 +639,7 @@ class SupplierOrderGetView(views.APIView):
 
                 # добавляем блок данных по заказу
                 orders_data.append({
-                    'order_id': order.id,
+                    'id': order.id,
                     'buyer_id': order.buyer.id,
                     'state': order.state,
                     'order_sum': order_sum,
@@ -630,3 +655,15 @@ class SupplierOrderGetView(views.APIView):
             })
         serializer = SupplierOrdertGetSerializer(supplier_data, many=True)
         return Response(serializer.data)
+
+
+class CustomConvertTokenView(ConvertTokenView):
+
+    @extend_schema(
+        request=extend_schema_data['ConvertTokenView']['request'],
+        responses=extend_schema_data['ConvertTokenView']['responses'],
+        description=extend_schema_data['ConvertTokenView']['description'],
+    )
+    def post(self, request, *args, **kwargs):
+        return super().post(request, *args, **kwargs)
+

@@ -15,10 +15,16 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path, include
+from apiorders.schema import schema_urlpatterns
+from backend.views import CustomConvertTokenView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/v1/', include('backend.urls', namespace='backend')),
+    path('auth/convert-token/', CustomConvertTokenView.as_view(), name='convert-token'),
     path('auth/', include('drf_social_oauth2.urls', namespace='drf')),
 ]
+
+print(urlpatterns)
+urlpatterns += schema_urlpatterns
 

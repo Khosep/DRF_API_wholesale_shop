@@ -49,7 +49,7 @@ INSTALLED_APPS = [
     'oauth2_provider',
     'social_django',
     'drf_social_oauth2',
-
+    'drf_spectacular',
 ]
 
 MIDDLEWARE = [
@@ -186,8 +186,8 @@ REST_FRAMEWORK = {
         'user_short': '120/min',
         'user_long': '2400/day',
         'price_list_update': '10/min',
-
-    }
+    },
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
 }
 
 AUTHENTICATION_BACKENDS = (

@@ -29,7 +29,7 @@ class BuyerSerializer(serializers.ModelSerializer):
 class UserProfileSerializer(serializers.ModelSerializer):
     """
     Для UserProfileView. В зависимости от значения поля "type" пользователя добавляет в
-    fields дополнительное поле (если type="buyer" добавляет поле "buyers", для type="supplier" - "supplier")
+    fields дополнительное поле (если type="buyer" добавляет поле "buyers", для type="supplier" - "suppliers")
     """
 
     class Meta:
@@ -92,28 +92,6 @@ class ProductSupplierSerializer(serializers.ModelSerializer):
         read_only_fields = ('id',)
 
 
-class BasketGetSerializer(serializers.Serializer):
-
-    buyer_id = serializers.IntegerField()
-    order_id = serializers.IntegerField()
-    order_sum = serializers.DecimalField(max_digits=11, decimal_places=2)
-    order_items = serializers.ListField(child=serializers.DictField())
-
-
-class BuyerOrdertGetSerializer(serializers.Serializer):
-
-    buyer_id = serializers.IntegerField()
-    buyer_sum = serializers.DecimalField(max_digits=11, decimal_places=2)
-    orders = serializers.ListField(child=serializers.DictField())
-
-
-class SupplierOrdertGetSerializer(serializers.Serializer):
-
-    supplier_id = serializers.IntegerField()
-    supplier_sum = serializers.DecimalField(max_digits=11, decimal_places=2)
-    orders = serializers.ListField(child=serializers.DictField())
-
-
 class OrderItemSerializer(serializers.ModelSerializer):
 
     class Meta:
@@ -131,3 +109,71 @@ class OrderItemSerializer(serializers.ModelSerializer):
             defaults={'quantity': quantity}
         )
         return instance
+
+
+class OrderItemGetSerializer(serializers.ModelSerializer):
+    product_name = serializers.CharField(max_length=150)
+    sum = serializers.DecimalField(max_digits=11, decimal_places=2)
+    external_id = serializers.IntegerField(required=False)
+
+    class Meta:
+        model = OrderItem
+        fields = ['id', 'product_supplier_id', 'product_name', 'external_id', 'quantity', 'sum']
+        read_only_fields = ['id']
+
+
+class BasketGetSerializer(serializers.Serializer):
+
+    buyer_id = serializers.IntegerField()
+    order_id = serializers.IntegerField()
+    order_sum = serializers.DecimalField(max_digits=12, decimal_places=2)
+    order_items = OrderItemGetSerializer(many=True)
+
+
+class OrderSerializer(serializers.ModelSerializer):
+    order_sum = serializers.DecimalField(max_digits=12, decimal_places=2)
+    state = serializers.ChoiceField(choices=STATE_CHOICES[1:])
+    order_items = OrderItemGetSerializer(many=True)
+
+    class Meta:
+        model = Order
+        fields = ['id', 'buyer_id', 'state', 'order_sum', 'order_items']
+        read_only_fields = ['id']
+
+class BuyerOrderGetSerializer(serializers.Serializer):
+
+    buyer_id = serializers.IntegerField()
+    buyer_sum = serializers.DecimalField(max_digits=12, decimal_places=2)
+    orders = OrderSerializer(many=True)
+
+class BuyerOrderPostRequestSerializer(serializers.Serializer):
+
+    orders_ids = serializers.ListField(child=serializers.IntegerField())
+
+
+class SupplierOrdertGetSerializer(serializers.Serializer):
+
+    supplier_id = serializers.IntegerField()
+    supplier_sum = serializers.DecimalField(max_digits=12, decimal_places=2)
+    # orders = serializers.ListField(child=serializers.DictField())
+    orders = OrderSerializer(many=True)
+
+# Блок из 2-х сериалайзеров для метода POST BasketView:
+class BasketPostOrderItemSerializer(serializers.Serializer):
+    product_id = serializers.IntegerField()
+    supplier_id = serializers.IntegerField()
+    quantity = serializers.IntegerField()
+
+class BasketPostRequestSerializer(serializers.Serializer):
+    buyer_id = serializers.IntegerField()
+    items = BasketPostOrderItemSerializer(many=True)
+
+
+class BasketDeletetRequestSerializer(serializers.Serializer):
+    buyer_id = serializers.IntegerField()
+    items = serializers.ListField(child=serializers.IntegerField())
+
+
+
+
+
